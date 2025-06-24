@@ -1,8 +1,19 @@
-// app/components/admin/AllocateHouseModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+
+// Define types
+type Applicant = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+type House = {
+  id: number;
+  type: string;
+};
 
 export default function AllocateHouseModal({
   isOpen,
@@ -16,26 +27,26 @@ export default function AllocateHouseModal({
   const [applicantId, setApplicantId] = useState<string>("");
   const [houseId, setHouseId] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [applicants, setApplicants] = useState<any[]>([]);
-  const [houses, setHouses] = useState<any[]>([]);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [houses, setHouses] = useState<House[]>([]);
 
   // Fetch applicants and available houses
   const fetchData = async () => {
     const { data: applicantsData, error: applicantsError } = await supabase
       .from("applicants")
       .select("id, name, email")
-      .eq("status", "pending"); // Only fetch applicants with "pending" status
+      .eq("status", "pending");
 
     const { data: housesData, error: housesError } = await supabase
       .from("houses")
       .select("id, type")
-      .eq("available", true); // Only fetch available houses
+      .eq("available", true);
 
     if (applicantsError || housesError) {
       console.error("Error fetching data:", applicantsError || housesError);
     } else {
-      setApplicants(applicantsData || []);
-      setHouses(housesData || []);
+      setApplicants(applicantsData as Applicant[] || []);
+      setHouses(housesData as House[] || []);
     }
   };
 
@@ -52,10 +63,13 @@ export default function AllocateHouseModal({
     setLoading(true);
 
     try {
+      const applicantIdNum = parseInt(applicantId);
+      const houseIdNum = parseInt(houseId);
+
       // Update house availability
       const { error: houseError } = await supabase
         .from("houses")
-        .update({ available: false, allocated_to: parseInt(applicantId) })
+        .update({ available: false, allocated_to: applicantIdNum })
         .eq("id", houseId);
 
       if (houseError) throw houseError;
@@ -73,8 +87,8 @@ export default function AllocateHouseModal({
         .from("allocations")
         .insert([
           {
-            applicant_id: parseInt(applicantId),
-            house_id: parseInt(houseId),
+            applicant_id: applicantIdNum,
+            house_id: houseIdNum,
             allocated_at: new Date().toISOString(),
           },
         ]);
@@ -82,12 +96,13 @@ export default function AllocateHouseModal({
       if (allocationError) throw allocationError;
 
       // Send notification to the applicant
+      const house = houses.find((h) => h.id === houseIdNum);
       const { error: notificationError } = await supabase
         .from("notifications")
         .insert([
           {
-            applicant_id: parseInt(applicantId),
-            message: `You have been allocated a house: ${houses.find((h) => h.id === parseInt(houseId))?.type}.`,
+            applicant_id: applicantIdNum,
+            message: `You have been allocated a house: ${house?.type}.`,
           },
         ]);
 
@@ -112,7 +127,9 @@ export default function AllocateHouseModal({
         <h2 className="text-xl font-bold mb-4">Allocate House</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="applicant" className="block mb-2">Select Applicant:</label>
+            <label htmlFor="applicant" className="block mb-2">
+              Select Applicant:
+            </label>
             <select
               id="applicant"
               value={applicantId}
@@ -122,14 +139,16 @@ export default function AllocateHouseModal({
             >
               <option value="">Select an applicant</option>
               {applicants.map((applicant) => (
-                <option key={applicant.id} value={applicant.id}>
+                <option key={applicant.id} value={applicant.id.toString()}>
                   {applicant.name} ({applicant.email})
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label htmlFor="house" className="block mb-2">Select House:</label>
+            <label htmlFor="house" className="block mb-2">
+              Select House:
+            </label>
             <select
               id="house"
               value={houseId}
@@ -139,7 +158,7 @@ export default function AllocateHouseModal({
             >
               <option value="">Select a house</option>
               {houses.map((house) => (
-                <option key={house.id} value={house.id}>
+                <option key={house.id} value={house.id.toString()}>
                   {house.type}
                 </option>
               ))}
